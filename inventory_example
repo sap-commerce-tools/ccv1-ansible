@@ -1,0 +1,16 @@
+# Keep backend files at the top, the order is used to perform hybris update and
+# other expensive operations only once
+[backend]
+acme-q-fr-adm-001.ms.ycs.io
+
+[frontend]
+acme-q-fr-app-001.ms.ycs.io
+acme-q-fr-app-002.ms.ycs.io
+
+[hybris:children]
+backend
+frontend
+
+[hybris:vars]
+#environment configuration folder name, e.g. dev, stag, prod, qa, dev2 etc...
+hcs_environment=qa

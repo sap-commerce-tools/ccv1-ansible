@@ -1,0 +1,83 @@
+
+- name: "Activate {{package}} on {{hcs_environment}}"
+  gather_facts: False
+  any_errors_fatal: True
+  hosts: hybris
+  serial: "100%"
+  become: True
+  vars:
+    version_folder: "/opt/{{package}}"
+    run_update: "{{ (update is defined and update|bool) or False }}"
+    update_config_file: "{{version_folder}}/data/misc/update.json"
+  
+  tasks:
+
+    - name: "Sanity Check: is {{version_folder}} is available?"
+      stat:
+        path: "{{version_folder}}"
+      register: version_stat
+    
+    - name: "Fail on missing version folder"
+      fail:
+        msg: "{{version_folder}} does not exist on {{inventory_hostname}}"
+      when: not (version_stat.stat.isdir is defined and version_stat.stat.isdir)
+
+    - name: "Stop hybris"
+      service:
+        name: hybris
+        state: stopped
+      
+    - name: "link new version"
+      file:
+        src: "{{version_folder}}"
+        dest: "/opt/hybris"
+        owner: hybris
+        group: hybris
+        state: link
+
+    - name: "update tomcate config for {{package}}"
+      shell: >-
+        . ./setantenv.sh; 
+        ant deploy
+      args:
+        chdir: "/opt/hybris/bin/platform"
+      become: True
+      become_user: hybris
+
+    - name: "check for {{update_config_file}}"
+      stat:
+        path: "{{update_config_file}}"
+      register: st
+      when:
+        - run_update
+        - inventory_hostname == ansible_play_hosts[0] #only run for the first backend node
+
+    # run ant updatesystem:
+    # - for tenant master
+    # - maybe with a config file
+    # - without unnecessarily building the platform
+    # - and without starting cronjobs
+    # - and pipe the output to a log file for traceability
+    - name: "run updatesystem"
+      shell: >-
+        . ./setantenv.sh;
+        ant updatesystem
+        -Dtenant=master
+        {{"-DconfigFile=" + update_config_file if (st.stat.isreg is defined and st.stat.isreg) else "" }}
+        -Dde.hybris.platform.ant.production.skip.build=true
+        -Dcronjob.timertask.loadonstartup=false
+        > /opt/hybris/log/update-running-system-$(date +%Y-%m-%dT%H-%M-%S).log 2>&1
+      args:
+        chdir: "/opt/hybris/bin/platform"
+      become: True
+      become_user: hybris
+      async: 900 #15min
+      poll: 30 #seconds
+      when:
+        - run_update
+        - inventory_hostname == ansible_play_hosts[0] #run only once (for the first backend node)
+
+    - name: "Start hybris"
+      service:
+        name: hybris
+        state: started

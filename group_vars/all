@@ -1,0 +1,2 @@
+#The default ssh user name to use.
+#ansible_user: hcs_user_name

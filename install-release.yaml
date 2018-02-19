@@ -1,0 +1,145 @@
+
+- name: "Prepare new hybris release on all environments"
+  any_errors_fatal: True
+  hosts: hybris
+  serial: "100%"
+  become: True
+  become_user: hybris
+  vars:
+    package_folder: "{{deployment_folder}}/{{package}}"
+    version_folder: "/opt/{{package}}"
+    config_folder: "{{version_folder}}/config"
+    package_config_folder: "{{package_folder}}/hybris/config/{{hcs_environment}}"
+    package_misc_folder: "{{package_folder}}/hybris/misc/{{hcs_environment}}"
+    version_misc_folder: "{{version_folder}}/data/misc"
+  
+  tasks:
+    - name: test for available disk space
+      assert:
+        that: 
+          - not {{ item.mount == '/NFS_DATA' and ( item.size_available|int < minimal_available_space|int ) }}
+          - not {{ item.mount == '/opt' and ( item.size_available|int < minimal_available_space|int ) }}
+      with_items: "{{ansible_mounts}}"
+      loop_control:
+        label: "{{item.mount}}"
+      
+    - name: "run package validation for {{package_folder}}.zip"
+      command: "bash -c '/opt/ytools/ypackagevalidator2/ypv2.sh -e {{hcs_environment}} {{package_folder}}.zip'"
+      when: inventory_hostname == ansible_play_hosts[0] #only run once (for the first backend node)
+
+    - name: "delete version {{package_folder}}"
+      file:
+        path: "{{package_folder}}"
+        state: absent
+      when: inventory_hostname == ansible_play_hosts[0] #only run once (for the first backend node)
+      become: True
+      become_user: root
+    
+    - name: "unpack deployment package"
+      unarchive:
+        remote_src: yes
+        src: "{{package_folder}}.zip"
+        dest: "{{deployment_folder}}"
+      when: inventory_hostname == ansible_play_hosts[0] #only run once (for the first backend node)
+
+    - name: "reset {{version_folder}}"
+      file:
+        path: "{{version_folder}}"
+        state: absent
+      become: True
+      become_user: root
+
+    - name: "create {{version_folder}}"
+      file:
+        path: "{{version_folder}}"
+        state: directory
+        owner: hybris
+        group: hybris
+      become: True
+      become_user: root
+
+    - name: "unpack hybris"
+      unarchive:
+        remote_src: yes
+        src: "{{package_folder}}/hybris/bin/{{item}}"
+        dest: "{{version_folder}}"
+      with_items:
+        - hybrisServer-Platform.zip
+        - hybrisServer-AllExtensions.zip
+    
+    - name: "move hybris folder content to package root"
+      shell: "mv -f {{version_folder}}/hybris/* {{version_folder}}"
+
+    - name: "remove empty hybris folder"
+      file:
+        path: "{{version_folder}}/hybris"
+        state: absent
+    
+    - name: "link log folder"
+      file:
+        src: /var/log/hybris
+        dest: "{{version_folder}}/log"
+        state: link
+
+    - name: "create hybris/config folder"
+      file:
+        path: "{{version_folder}}/config/conf.d"
+        state: directory
+
+    - name: "copy master config {{master_config}}"
+      shell: "cp -rf {{master_config}}/* {{version_folder}}/config"
+    
+    - name: "copy customer config {{package_config_folder}}"
+      shell: "cp -nr {{package_config_folder}}/* {{version_folder}}/config"
+    
+    - name: "build hybris optional config dir"
+      command: "mv -f {{item.key}} {{config_folder}}/conf.d/{{item.value}}"
+      with_dict:
+        "{{config_folder}}/header.properties": "10-local.properties"
+        "{{config_folder}}/{{inventory_hostname_short}}.properties": "11-local.properties"
+        "{{config_folder}}/hybris.properties": "12-local.properties"
+      loop_control:
+        label: "move {{item.key}} to {{config_folder}}/conf.d/{{item.value}}"
+
+    - name: "link customer.properties to local.properties"
+      file:
+        src: "{{item}}"
+        dest: "{{config_folder}}/local.properties"
+        state: link
+      ignore_errors: True
+      with_items:
+        - "customer.properties"
+        - "customer.{{hcs_role}}.properties"
+
+    - name: "set hybris.optional.config.dir={{config_folder}}/conf.d in local.properties"
+      blockinfile:
+        path: "{{config_folder}}/local.properties"
+        follow: True
+        block: |
+          hybris.optional.config.dir={{config_folder}}/conf.d
+
+    - name: "check if localextensions.{{hcs_role}}.xml exists"
+      stat:
+        path: "{{config_folder}}/localextensions.{{hcs_role}}.xml"
+      register: st
+    
+    - name: "link localextensions.{{hcs_role}}.xml to localextensions.xml (optional)"
+      file:
+        src: "localextensions.{{hcs_role}}.xml"
+        dest: "{{config_folder}}/localextensions.xml"
+        state: link
+        force: true
+      when: st.stat.isreg is defined and st.stat.isreg #is the file a regular file?
+
+    - name: "check if {{package_misc_folder}} exists"
+      stat:
+        path: "{{package_misc_folder}}"
+      register: misc
+    - name: "create {{version_misc_folder}} folder (optional)"
+      file:
+        path: "{{version_misc_folder}}"
+        state: directory
+      when: misc.stat.isdir is defined and misc.stat.isdir #is it a directory?
+    - name: "copy package misc folder to hybris/data/misc (optional)"
+      shell: "cp -rf {{package_misc_folder}}/* {{version_misc_folder}}"
+      when: misc.stat.isdir is defined and misc.stat.isdir  #is it a directory?
