@@ -14,7 +14,7 @@ Following optimizations are present:
 
 - hcs VPN connection
 - hcs ssh access\
-  (use the file  `group_vars/all` to define the default login user or `~/.ssh/config`)
+  (use the file  `group_vars/all` to define the default login user, or setup `~/.ssh/config`)
 - hcs user has sudo rights (can change to `root` and `hybris`)
 - deployment package (zip and md5) is available in `/NFS_DATA/deployment`
 
