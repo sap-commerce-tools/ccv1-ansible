@@ -22,6 +22,29 @@
       with_items: "{{ansible_mounts}}"
       loop_control:
         label: "{{item.mount}}"
+
+    - name: upload {{package}}.zip to {{deployment_folder}}
+      synchronize:
+        src: "{{hcs_artifact_folder}}/{{package}}.zip"
+        dest: "{{deployment_folder}}/"
+        archive: False
+        recursive: True
+        partial: True
+      when:
+      - inventory_hostname == ansible_play_hosts[0]
+      - hcs_artifact_folder is defined
+      become: False
+    - name: upload {{package}}.md5 to {{deployment_folder}}
+      synchronize:
+        src: "{{hcs_artifact_folder}}/{{package}}.md5"
+        dest: "{{deployment_folder}}/"
+        archive: False
+        recursive: True
+        partial: True
+      when:
+      - inventory_hostname == ansible_play_hosts[0]
+      - hcs_artifact_folder is defined
+      become: False
       
     - name: "run package validation for {{package_folder}}.zip"
       command: "bash -c '/opt/ytools/ypackagevalidator2/ypv2.sh -e {{hcs_environment}} {{package_folder}}.zip'"
@@ -86,13 +109,15 @@
         path: "{{version_folder}}/config/conf.d"
         state: directory
 
-    - name: "copy master config {{master_config}}"
-      shell: "cp -rf {{master_config}}/* {{version_folder}}/config"
+      #the master config folder contains the tomcat config, license etc ->
+      #mandatory for the deployment!!
+    - name: "copy hcs-managed hybris config from {{hcs_managed_hybris_config}}"
+      shell: "cp -rf {{hcs_managed_hybris_config}}/* {{version_folder}}/config"
     
     - name: "copy customer config {{package_config_folder}}"
       shell: "cp -nr {{package_config_folder}}/* {{version_folder}}/config"
     
-    - name: "build hybris optional config dir"
+    - name: "setup hybris optional config folder"
       command: "mv -f {{item.key}} {{config_folder}}/conf.d/{{item.value}}"
       with_dict:
         "{{config_folder}}/header.properties": "10-local.properties"

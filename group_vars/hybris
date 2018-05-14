@@ -1,3 +1,6 @@
-master_config: /NFS_DATA/config/hybris-config
-deployment_folder: /NFS_DATA/deployment
 minimal_available_space: "{{2.5 * 1024 * 1024 * 1024}}" #2.5 GiB
+deployment_folder: /NFS_DATA/deployment
+hcs_managed_hybris_config: /NFS_DATA/config/hybris-config
+
+#configure variable below if you want install-release.yaml to upload the package
+#hcs_artifact_folder: /path/to/deployment/packages

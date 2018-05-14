@@ -11,7 +11,6 @@
     update_config_file: "{{version_folder}}/data/misc/update.json"
   
   tasks:
-
     - name: "Sanity Check: is {{version_folder}} is available?"
       stat:
         path: "{{version_folder}}"
