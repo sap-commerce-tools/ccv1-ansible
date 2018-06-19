@@ -1,0 +1,35 @@
+- name: "Delete old release"
+  gather_facts: False
+  any_errors_fatal: True
+  hosts: hybris
+  serial: "100%"
+  become: True
+
+  vars:
+    package_folder: "{{deployment_folder}}/{{package}}"
+    version_folder: "/opt/{{package}}"
+    
+  tasks:
+
+    - stat:
+        path: /opt/hybris
+      register: sym
+
+    - name: "Check installed version"
+      fail:
+        msg: "{{ version_folder }} is the installed version. Can not delete"
+      when:
+      - sym.stat.islnk is defined
+      - sym.stat.islnk
+      - sym.stat.lnk_target == version_folder
+
+    - name: Delete {{ package_folder }}*
+      shell: "rm -rf {{ package_folder }}*"
+      args:
+        warn: False
+      when: inventory_hostname == ansible_play_hosts[0] #only run once (for the first backend node)
+
+    - name: Delete {{ version_folder }}
+      file:
+        state: absent
+        path: "{{ version_folder }}"
