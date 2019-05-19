@@ -1,6 +1,7 @@
 # Ansible Playbooks for Commerce Cloud **v1**
+[![ko-fi](https://www.ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/W7W7VS24)
 
-Here you can find ansbile playbooks to install a hcs deployment package to open environments
+Here you can find Ansbile playbooks to install a hcs deployment package to open environments
 
 It only supports stop-the-world deployments for now, with or without running hybris update.
 
